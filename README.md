@@ -19,6 +19,8 @@ en el commit exacto que funciono durante las pruebas.
   un lanzador que evita instancias duplicadas.
 - Hibernacion mediante swapfile, suspension deshabilitada y recuperacion de
   Firefox, Slimski y Wi-Fi al reanudar.
+- Hibernacion automatica al cerrar la tapa, con proteccion contra eventos
+  duplicados (`--no-hibernate-on-lid` permite desactivarla).
 - Rofi con `Win`, `Win+Espacio` o `Win+R`, y explorador con `Win+E`.
 
 ## Instalacion

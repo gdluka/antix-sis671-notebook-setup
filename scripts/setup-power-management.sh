@@ -8,6 +8,7 @@ desktop_user=""
 swap_file="/swap/swap"
 swap_size_gib="5"
 assume_yes="false"
+hibernate_on_lid="true"
 audit_failures=0
 reboot_required="false"
 
@@ -27,6 +28,8 @@ Opciones:
   --swap-file RUTA         Swapfile que se crea si no hay swap activo
                            (default: /swap/swap).
   --swap-size-gib N        Tamaño del swapfile nuevo (default: 5 GiB).
+  --hibernate-on-lid       Hiberna al cerrar la tapa (predeterminado).
+  --no-hibernate-on-lid    Deja la tapa sin acción automática.
   --yes                    Aplica sin pedir confirmación.
   -h, --help               Muestra esta ayuda.
 
@@ -62,6 +65,14 @@ while [[ $# -gt 0 ]]; do
       ;;
     --yes)
       assume_yes="true"
+      shift
+      ;;
+    --hibernate-on-lid)
+      hibernate_on_lid="true"
+      shift
+      ;;
+    --no-hibernate-on-lid)
+      hibernate_on_lid="false"
       shift
       ;;
     -h|--help)
@@ -299,8 +310,59 @@ disable_acpi_event() {
   install_from_diverted "${generated_file}" "${target}" 0644
 }
 
+configure_lid_hibernate() {
+  local event_file handler event_temp handler_temp elogind_temp
+  event_file="/etc/acpi/events/lidbtn"
+  handler="/etc/acpi/notebook-lid-hibernate.sh"
+  ensure_diversion "${event_file}"
+
+  event_temp="$(mktemp "${event_file}.XXXXXX")"
+  cat > "${event_temp}" <<'EOF'
+# Hibernar solamente cuando la tapa queda realmente cerrada.
+event=button[ /]lid
+action=/etc/acpi/notebook-lid-hibernate.sh
+EOF
+  install_from_diverted "${event_temp}" "${event_file}" 0644
+
+  handler_temp="$(mktemp "${handler}.XXXXXX")"
+  cat > "${handler_temp}" <<'EOF'
+#!/bin/sh
+set -u
+
+# acpid también emite un evento al abrir. En ese caso no hacer nada.
+grep -qis 'closed' /proc/acpi/button/lid/*/state 2>/dev/null || exit 0
+
+# Algunos firmware emiten el mismo evento dos veces.
+install -d -m 0755 /run/lock
+exec 9>/run/lock/notebook-lid-hibernate.lock
+flock -n 9 || exit 0
+
+logger -t notebook-lid "Tapa cerrada: iniciando hibernación."
+exec /usr/sbin/pm-hibernate
+EOF
+  install_from_diverted "${handler_temp}" "${handler}" 0755
+
+  # acpid es el único encargado de la tapa; evita una suspensión simultánea.
+  install -d -m 0755 /etc/elogind/logind.conf.d
+  elogind_temp="$(mktemp /etc/elogind/logind.conf.d/90-notebook-lid.XXXXXX)"
+  cat > "${elogind_temp}" <<'EOF'
+[Login]
+HandleLidSwitch=ignore
+HandleLidSwitchExternalPower=ignore
+HandleLidSwitchDocked=ignore
+EOF
+  chmod 0644 "${elogind_temp}"
+  mv "${elogind_temp}" /etc/elogind/logind.conf.d/90-notebook-lid.conf
+}
+
 configure_acpi() {
-  disable_acpi_event /etc/acpi/events/lidbtn
+  if [[ "${hibernate_on_lid}" == "true" ]]; then
+    configure_lid_hibernate
+  else
+    disable_acpi_event /etc/acpi/events/lidbtn
+    rm -f /etc/acpi/notebook-lid-hibernate.sh \
+      /etc/elogind/logind.conf.d/90-notebook-lid.conf
+  fi
   disable_acpi_event /etc/acpi/events/sleepbtn
   disable_acpi_event /etc/acpi/events/sony-sleep
   if command -v sv >/dev/null 2>&1 && [[ -e /etc/service/acpid ]]; then
@@ -310,7 +372,11 @@ configure_acpi() {
   else
     die "No se encontró cómo reiniciar acpid."
   fi
-  pass "Tapa y botones de suspensión a RAM neutralizados."
+  if [[ "${hibernate_on_lid}" == "true" ]]; then
+    pass "Cierre de tapa configurado para hibernar; suspensión neutralizada."
+  else
+    pass "Tapa y botones de suspensión a RAM neutralizados."
+  fi
 }
 
 configure_desktop_menu() {
@@ -558,14 +624,22 @@ audit_power() {
       || fail "El swap es menor que la RAM visible."
   fi
 
-  local event_file
-  for event_file in /etc/acpi/events/lidbtn /etc/acpi/events/sleepbtn; do
-    if [[ -r "${event_file}" ]] && grep -q '^action=/bin/true$' "${event_file}"; then
-      pass "Evento neutralizado: ${event_file}"
-    else
-      fail "Evento todavía activo: ${event_file}"
-    fi
-  done
+  if [[ -r /etc/acpi/events/lidbtn ]] \
+    && grep -q '^action=/etc/acpi/notebook-lid-hibernate.sh$' /etc/acpi/events/lidbtn \
+    && [[ -x /etc/acpi/notebook-lid-hibernate.sh ]]; then
+    pass "Cierre de tapa configurado para hibernar."
+  elif [[ -r /etc/acpi/events/lidbtn ]] \
+    && grep -q '^action=/bin/true$' /etc/acpi/events/lidbtn; then
+    pass "Cierre de tapa sin acción automática."
+  else
+    fail "El comportamiento de la tapa no está configurado."
+  fi
+  if [[ -r /etc/acpi/events/sleepbtn ]] \
+    && grep -q '^action=/bin/true$' /etc/acpi/events/sleepbtn; then
+    pass "Botón de suspensión neutralizado."
+  else
+    fail "El botón de suspensión todavía está activo."
+  fi
 
   local gui_file backend_file
   gui_file="/usr/local/lib/desktop-session/desktop-session-exit.py"
