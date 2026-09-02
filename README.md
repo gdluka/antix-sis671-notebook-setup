@@ -77,3 +77,12 @@ Opciones utiles:
 - `scripts/configurar_rofi.sh`: atajos de IceWM y Rofi.
 - `scripts/setup-power-management.sh`: swap, resume e hibernacion.
 - `config/xorg.conf`: referencia de la configuracion SiS validada.
+
+## Licencia
+
+Copyright (C) 2026 Guillermo De Luca.
+
+Este proyecto se distribuye bajo la licencia
+[GNU GPL v3 o posterior](LICENSE). Puedes usarlo, estudiarlo, modificarlo y
+redistribuirlo bajo los mismos términos. Los componentes de terceros conservan
+sus propias licencias y no se redistribuyen en este repositorio.
