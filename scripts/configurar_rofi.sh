@@ -16,6 +16,7 @@ fi
 
 icewm_dir="$HOME/.icewm"
 keys_file="$icewm_dir/keys"
+preferences_file="$icewm_dir/preferences"
 begin_marker='# >>> rofi-notebook >>>'
 end_marker='# <<< rofi-notebook <<<'
 mkdir -p "$icewm_dir"
@@ -52,6 +53,33 @@ awk -v begin="$begin_marker" -v end="$end_marker" '
     echo "$end_marker"
 } >"$keys_file"
 
+# IceWM abre su menú propio al pulsar Super si Win95Keys está activo. Eso
+# compite con xcape y hace que el menú aparezca brevemente antes de cerrarse.
+if [[ ! -f $preferences_file ]]; then
+    if [[ -f /etc/X11/icewm/preferences ]]; then
+        cp /etc/X11/icewm/preferences "$preferences_file"
+    elif [[ -f /usr/share/icewm/preferences ]]; then
+        cp /usr/share/icewm/preferences "$preferences_file"
+    else
+        : >"$preferences_file"
+    fi
+fi
+preferences_backup="${preferences_file}.backup-$(date +%Y%m%d-%H%M%S)"
+cp -a "$preferences_file" "$preferences_backup"
+preferences_tmp=$(mktemp)
+awk '
+    /^#?[[:space:]]*Win95Keys=[01]([[:space:]]|$)/ {
+        if (!written) print "Win95Keys=0 # La tecla Windows queda reservada para Rofi"
+        written=1
+        next
+    }
+    { print }
+    END {
+        if (!written) print "Win95Keys=0 # La tecla Windows queda reservada para Rofi"
+    }
+' "$preferences_file" >"$preferences_tmp"
+mv "$preferences_tmp" "$preferences_file"
+
 # IceWM no interpreta de forma fiable una tecla modificadora pulsada sola.
 # xcape convierte un toque breve de Windows en Super+Espacio, pero conserva
 # combinaciones como Windows+E.
@@ -77,7 +105,7 @@ awk -v begin="$startup_begin" -v end="$startup_end" '
 chmod 0755 "$startup_file"
 rm -f "$startup_tmp"
 
-echo "Rofi configurado. Copia de seguridad: $backup"
+echo "Rofi configurado. Copias de seguridad: $backup y $preferences_backup"
 if pgrep -x icewm >/dev/null 2>&1; then
     echo 'Reinicia IceWM o la sesión para aplicar los atajos.'
 fi

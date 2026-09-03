@@ -22,6 +22,8 @@ en el commit exacto que funciono durante las pruebas.
 - Hibernacion automatica al cerrar la tapa, con proteccion contra eventos
   duplicados (`--no-hibernate-on-lid` permite desactivarla).
 - Rofi con `Win`, `Win+Espacio` o `Win+R`, y explorador con `Win+E`.
+- Touchpad Elantech con velocidad `0.6`, identificado por nombre y restaurado
+  automáticamente después de salir de hibernación.
 
 ## Instalacion
 
@@ -77,6 +79,8 @@ Opciones utiles:
 - `scripts/configurar_firefox.sh`: preferencias y lanzador protegido.
 - `scripts/configurar_psd.sh`: sincronizacion del perfil de Firefox con runit.
 - `scripts/configurar_rofi.sh`: atajos de IceWM y Rofi.
+- `scripts/configurar_touchpad.sh`: velocidad del touchpad y restauración al reanudar.
+- `scripts/notebook-touchpad-speed`: ajuste y observador de reanudación del touchpad.
 - `scripts/setup-power-management.sh`: swap, resume e hibernacion.
 - `config/xorg.conf`: referencia de la configuracion SiS validada.
 

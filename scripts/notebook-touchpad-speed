@@ -1,0 +1,40 @@
+#!/bin/sh
+
+device_name="${TOUCHPAD_DEVICE_NAME:-ETPS/2 Elantech Touchpad}"
+speed="${TOUCHPAD_ACCEL_SPEED:-0.6}"
+runtime_dir="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+pid_file="$runtime_dir/notebook-touchpad-watch.pid"
+
+apply_speed() {
+    device_id=$(xinput list --id-only "$device_name" 2>/dev/null) || return 0
+    [ -n "$device_id" ] || return 0
+    xinput set-prop "$device_id" "libinput Accel Speed" "$speed" 2>/dev/null || true
+}
+
+if [ "${1:-}" != "--watch" ]; then
+    apply_speed
+    exit 0
+fi
+
+if [ -r "$pid_file" ]; then
+    previous_pid=$(cat "$pid_file" 2>/dev/null || true)
+    if [ -n "$previous_pid" ] && kill -0 "$previous_pid" 2>/dev/null; then
+        exit 0
+    fi
+fi
+
+printf '%s\n' "$$" >"$pid_file"
+trap 'rm -f "$pid_file"' EXIT HUP INT TERM
+apply_speed
+
+dbus-monitor --system \
+    "type='signal',interface='org.freedesktop.login1.Manager',member='PrepareForSleep'" \
+    2>/dev/null |
+while IFS= read -r event; do
+    case "$event" in
+        *"boolean false"*)
+            sleep 2
+            apply_speed
+            ;;
+    esac
+done
