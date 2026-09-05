@@ -11,7 +11,8 @@ en el commit exacto que funciono durante las pruebas.
 ## Que configura
 
 - `apt update` y `apt upgrade`.
-- Controlador SiS 671 moderno con aceleracion EXA 2D y modo 1280x800 a 60 Hz.
+- Controlador SiS 671 moderno con aceleracion EXA 2D, panel 1280x800 y
+  monitor VGA 1366x768 extendido a la derecha mediante Xinerama.
 - Opcion de recuperacion VESA 1280x768.
 - GRUB oculto con espera de un segundo, arranque silencioso y animacion de
   consola compatible con esta GPU.
@@ -24,6 +25,9 @@ en el commit exacto que funciono durante las pruebas.
 - Rofi con `Win`, `Win+Espacio` o `Win+R`, y explorador con `Win+E`.
 - Touchpad Elantech con velocidad `0.6`, identificado por nombre y restaurado
   automáticamente después de salir de hibernación.
+- Inicio reforzado del agente de impresión bajo IceWM. El ajuste complementa el
+  archivo XDG del instalador y evita que la VPN embebida quede desconectada
+  después de reiniciar.
 
 ## Instalacion
 
@@ -81,8 +85,10 @@ Opciones utiles:
 - `scripts/configurar_rofi.sh`: atajos de IceWM y Rofi.
 - `scripts/configurar_touchpad.sh`: velocidad del touchpad y restauración al reanudar.
 - `scripts/notebook-touchpad-speed`: ajuste y observador de reanudación del touchpad.
+- `scripts/configurar_agente_impresion.sh`: inicio confiable del agente y su VPN
+  embebida en la sesión de IceWM (requiere que el agente ya esté instalado).
 - `scripts/setup-power-management.sh`: swap, resume e hibernacion.
-- `config/xorg.conf`: referencia de la configuracion SiS validada.
+- `config/xorg.conf`: referencia de la configuracion SiS dual-head validada.
 
 ## Licencia
 

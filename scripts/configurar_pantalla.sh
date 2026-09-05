@@ -16,7 +16,8 @@ usage() {
 Uso: configurar_pantalla.sh [--check] [--restart-ui] [--force] [--vesa]
 
 Compila e instala el controlador comunitario SiS 671 compatible con Xorg 21,
-habilita aceleracion EXA 2D y configura el panel en 1280x800 a 60 Hz.
+habilita aceleracion EXA 2D y configura el panel 1280x800 con un monitor VGA
+1366x768 extendido a la derecha.
 
   --check       Solo comprueba la configuracion actual.
   --restart-ui  Reinicia Slimski al terminar (cierra la sesion grafica).
@@ -68,9 +69,12 @@ if $check_only; then
         [[ -r $driver_module ]] \
             && grep -q 'Driver "sis671"' "$xorg_config" 2>/dev/null \
             && grep -q 'Option "NoAccel" "false"' "$xorg_config" 2>/dev/null \
+            && grep -q 'Identifier "SiS671DualHead"' "$xorg_config" 2>/dev/null \
+            && grep -q 'Option "Xinerama" "true"' "$xorg_config" 2>/dev/null \
             && grep -q 'Modes "1280x800"' "$xorg_config" 2>/dev/null \
-            && { echo 'OK: SiS 671 con EXA y 1280x800 esta configurado.'; exit 0; }
-        echo 'PENDIENTE: falta el controlador SiS 671 moderno o su configuracion.'
+            && grep -q 'Modes "1366x768"' "$xorg_config" 2>/dev/null \
+            && { echo 'OK: panel 1280x800 y VGA 1366x768 extendido estan configurados.'; exit 0; }
+        echo 'PENDIENTE: falta el controlador SiS 671 moderno o la configuracion dual.'
     fi
     exit 1
 fi
@@ -139,29 +143,72 @@ else
     "${sudo_cmd[@]}" install -o root -g root -m 0644 "$built_module" "$driver_module"
 
     cat >"$config_tmp" <<'EOF'
-# SiS 771/671 con controlador comunitario para Xorg 21.x.
+# SiS 771/671 con panel 1280x800 y VGA 1366x768 extendido.
+Section "ServerLayout"
+    Identifier "SiS671DualHead"
+    Screen 0 "LaptopScreen" 0 0
+    Screen 1 "VGAScreen" RightOf "LaptopScreen"
+    Option "Clone" "off"
+    Option "Xinerama" "true"
+EndSection
+
 Section "Device"
-    Identifier "Device0"
+    Identifier "SiS671-LCD"
     Driver "sis671"
+    BusID "PCI:1:0:0"
+    Screen 0
+    Option "ForceCRT1" "true"
+    Option "ForceCRT2Type" "LCD"
+    Option "EnableSiSCtrl" "true"
     Option "NoAccel" "false"
     Option "UseTiming1366" "no"
 EndSection
 
+Section "Device"
+    Identifier "SiS671-VGA"
+    Driver "sis671"
+    BusID "PCI:1:0:0"
+    Screen 1
+    Option "ForceCRT1" "true"
+    Option "ForceCRT2Type" "LCD"
+    Option "ForceCRT1VGAAspect" "WIDE"
+    Option "UseTiming1366" "true"
+    Option "NoAccel" "false"
+EndSection
+
 Section "Monitor"
-    Identifier "Monitor0"
+    Identifier "LaptopLCD"
     HorizSync 30-82
-    # El panel a 60 Hz reduce el trabajo de composicion en esta CPU antigua.
-    VertRefresh 59-61
+    VertRefresh 50-75
+    Option "DPMS"
+EndSection
+
+Section "Monitor"
+    Identifier "ExternalVGA"
+    HorizSync 30-70
+    VertRefresh 56-75
+    Option "DPMS"
 EndSection
 
 Section "Screen"
-    Identifier "Screen0"
-    Device "Device0"
-    Monitor "Monitor0"
+    Identifier "LaptopScreen"
+    Device "SiS671-LCD"
+    Monitor "LaptopLCD"
     DefaultDepth 24
     SubSection "Display"
         Depth 24
         Modes "1280x800" "1024x768" "800x600"
+    EndSubSection
+EndSection
+
+Section "Screen"
+    Identifier "VGAScreen"
+    Device "SiS671-VGA"
+    Monitor "ExternalVGA"
+    DefaultDepth 24
+    SubSection "Display"
+        Depth 24
+        Modes "1366x768" "1024x768" "800x600"
     EndSubSection
 EndSection
 EOF
@@ -178,7 +225,7 @@ fi
 if $use_vesa; then
     echo 'Configuracion VESA 1280x768 instalada.'
 else
-    echo "Controlador SiS 671 $driver_commit y configuracion 1280x800 instalados."
+    echo "Controlador SiS 671 $driver_commit y escritorio 1280x800 + 1366x768 instalados."
 fi
 
 if $restart_ui; then

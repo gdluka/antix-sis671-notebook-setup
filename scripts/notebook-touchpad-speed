@@ -16,6 +16,10 @@ if [ "${1:-}" != "--watch" ]; then
     exit 0
 fi
 
+# Aplicar siempre en la sesión X actual. Después de reiniciar X puede quedar un
+# watcher anterior vivo con el mismo PID file, pero conectado al display viejo.
+apply_speed
+
 if [ -r "$pid_file" ]; then
     previous_pid=$(cat "$pid_file" 2>/dev/null || true)
     if [ -n "$previous_pid" ] && kill -0 "$previous_pid" 2>/dev/null; then
@@ -25,7 +29,6 @@ fi
 
 printf '%s\n' "$$" >"$pid_file"
 trap 'rm -f "$pid_file"' EXIT HUP INT TERM
-apply_speed
 
 dbus-monitor --system \
     "type='signal',interface='org.freedesktop.login1.Manager',member='PrepareForSleep'" \
