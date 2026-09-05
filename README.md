@@ -23,11 +23,14 @@ en el commit exacto que funciono durante las pruebas.
 - Hibernacion automatica al cerrar la tapa, con proteccion contra eventos
   duplicados (`--no-hibernate-on-lid` permite desactivarla).
 - Rofi con `Win`, `Win+Espacio` o `Win+R`, y explorador con `Win+E`.
+- `jq` para inspeccionar respuestas JSON durante diagnósticos y smoke tests.
 - Touchpad Elantech con velocidad `0.6`, identificado por nombre y restaurado
   automáticamente después de salir de hibernación.
 - Inicio reforzado del agente de impresión bajo IceWM. El ajuste complementa el
   archivo XDG del instalador y evita que la VPN embebida quede desconectada
   después de reiniciar.
+- Servicio runit para el cliente NetBird oficial ya instalado y vinculado. La
+  identidad permanece exclusivamente en `/var/lib/netbird/default.json`.
 
 ## Instalacion
 
@@ -87,6 +90,8 @@ Opciones utiles:
 - `scripts/notebook-touchpad-speed`: ajuste y observador de reanudación del touchpad.
 - `scripts/configurar_agente_impresion.sh`: inicio confiable del agente y su VPN
   embebida en la sesión de IceWM (requiere que el agente ya esté instalado).
+- `scripts/configurar_netbird.sh`: arranque automático del NetBird oficial bajo
+  runit, sin incluir ni modificar credenciales.
 - `scripts/setup-power-management.sh`: swap, resume e hibernacion.
 - `config/xorg.conf`: referencia de la configuracion SiS dual-head validada.
 
