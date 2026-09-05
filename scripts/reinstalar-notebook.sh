@@ -35,21 +35,21 @@ if [[ ${EUID} -eq 0 ]]; then
 fi
 
 script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
-for required in configurar_pantalla.sh configurar_arranque_visual.sh configurar_rofi.sh configurar_touchpad.sh configurar_firefox.sh configurar_psd.sh configurar_agente_impresion.sh configurar_netbird.sh; do
+for required in configurar_pantalla.sh configurar_arranque_visual.sh configurar_rofi.sh configurar_touchpad.sh configurar_firefox.sh configurar_psd.sh configurar_audio.sh configurar_agente_impresion.sh configurar_netbird.sh; do
     [[ -x "$script_dir/$required" ]] || {
         echo "Falta el script ejecutable: $script_dir/$required" >&2
         exit 1
     }
 done
 
-echo '[1/9] Comprobando permisos administrativos...'
+echo '[1/10] Comprobando permisos administrativos...'
 sudo -v
 
-echo '[2/9] Actualizando repositorios y paquetes...'
+echo '[2/10] Actualizando repositorios y paquetes...'
 sudo apt-get update
 sudo apt-get upgrade -y
 
-echo '[3/9] Instalando paquetes necesarios...'
+echo '[3/10] Instalando paquetes necesarios...'
 sudo apt-get install -y \
     firefox-esr \
     git \
@@ -69,7 +69,7 @@ sudo apt-get install -y \
     xserver-xorg-video-vesa \
     yad
 
-echo '[4/9] Configurando aplicaciones del usuario...'
+echo '[4/10] Configurando aplicaciones del usuario...'
 "$script_dir/configurar_rofi.sh" --skip-packages
 "$script_dir/configurar_touchpad.sh"
 if [[ -d $HOME/.mozilla/firefox ]]; then
@@ -79,29 +79,32 @@ else
 fi
 "$script_dir/configurar_psd.sh" --skip-packages --user "$USER"
 
-echo '[5/9] Configurando el arranque de NetBird...'
+echo '[5/10] Estabilizando el audio del conector auxiliar...'
+"$script_dir/configurar_audio.sh"
+
+echo '[6/10] Configurando el arranque de NetBird...'
 if command -v netbird >/dev/null 2>&1; then
     "$script_dir/configurar_netbird.sh"
 else
     echo 'NetBird aun no esta instalado; se omite su servicio runit.'
 fi
 
-echo '[6/9] Reforzando el inicio del agente de impresion...'
+echo '[7/10] Reforzando el inicio del agente de impresion...'
 if [[ -x ${XDG_DATA_HOME:-${HOME}/.local/share}/ecommerce-print-agent/ecommerce-print-agent ]]; then
     "$script_dir/configurar_agente_impresion.sh"
 else
     echo 'El agente aun no esta instalado; se omite su inicio automatico.'
 fi
 
-echo '[7/9] Aplicando el arreglo de pantalla despues de la actualizacion...'
+echo '[8/10] Aplicando el arreglo de pantalla despues de la actualizacion...'
 screen_args=()
 $restart_ui && screen_args+=(--restart-ui)
 "$script_dir/configurar_pantalla.sh" "${screen_args[@]}"
 
-echo '[8/9] Configurando GRUB y el arranque silencioso...'
+echo '[9/10] Configurando GRUB y el arranque silencioso...'
 "$script_dir/configurar_arranque_visual.sh"
 
-echo '[9/9] Configurando energía e hibernación...'
+echo '[10/10] Configurando energía e hibernación...'
 if $configure_power; then
     power_script="$script_dir/setup-power-management.sh"
     [[ -x $power_script ]] || power_script="$script_dir/Descargas/setup-power-management.sh"

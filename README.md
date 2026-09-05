@@ -24,6 +24,8 @@ en el commit exacto que funciono durante las pruebas.
   duplicados (`--no-hibernate-on-lid` permite desactivarla).
 - Rofi con `Win`, `Win+Espacio` o `Win+R`, y explorador con `Win+E`.
 - `jq` para inspeccionar respuestas JSON durante diagnósticos y smoke tests.
+- Audio HDA sin suspensión automática del códec y con auto-mute desactivado,
+  para estabilizar el conector auxiliar de esta notebook.
 - Touchpad Elantech con velocidad `0.6`, identificado por nombre y restaurado
   automáticamente después de salir de hibernación.
 - Inicio reforzado del agente de impresión bajo IceWM. El ajuste complementa el
@@ -92,6 +94,8 @@ Opciones utiles:
   embebida en la sesión de IceWM (requiere que el agente ya esté instalado).
 - `scripts/configurar_netbird.sh`: arranque automático del NetBird oficial bajo
   runit, sin incluir ni modificar credenciales.
+- `scripts/configurar_audio.sh`: evita los cortes por ahorro de energía del
+  códec Realtek y conserva el ajuste ALSA.
 - `scripts/setup-power-management.sh`: swap, resume e hibernacion.
 - `config/xorg.conf`: referencia de la configuracion SiS dual-head validada.
 
