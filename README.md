@@ -35,6 +35,8 @@ en el commit exacto que funciono durante las pruebas.
   después de reiniciar.
 - Servicio runit para el cliente NetBird oficial ya instalado y vinculado. La
   identidad permanece exclusivamente en `/var/lib/netbird/default.json`.
+- ConnMan como único gestor de red; si dhcpcd existe bajo runit queda detenido
+  y deshabilitado para evitar dos direcciones DHCP en `wlan0`.
 
 ## Instalacion
 
@@ -100,6 +102,8 @@ Opciones utiles:
   embebida en la sesión de IceWM (requiere que el agente ya esté instalado).
 - `scripts/configurar_netbird.sh`: arranque automático del NetBird oficial bajo
   runit, sin incluir ni modificar credenciales.
+- `scripts/configurar_wifi.sh`: evita que ConnMan y dhcpcd administren la misma
+  interfaz simultáneamente.
 - `scripts/configurar_audio.sh`: evita los cortes por ahorro de energía del
   códec Realtek y conserva el ajuste ALSA.
 - `scripts/setup-power-management.sh`: swap, resume e hibernacion.
@@ -181,6 +185,13 @@ Las pruebas unitarias no hibernan ni modifican consolas:
 ```bash
 PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -v
 ```
+
+## Dirección Wi-Fi duplicada (2026-09-12)
+
+Después de un reinicio, `wlan0` recibió `192.168.5.115` y `192.168.5.116`.
+ConnMan y dhcpcd estaban ambos en estado `run`; al detener y deshabilitar
+dhcpcd quedó solamente `192.168.5.115`. Esto descarta la hibernación como causa
+directa y confirma dos gestores DHCP concurrentes.
 
 ## Licencia
 
