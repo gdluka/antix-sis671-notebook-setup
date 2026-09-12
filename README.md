@@ -142,8 +142,10 @@ Para actualizar solamente este flujo, sin tocar swap, GRUB ni el evento de tapa:
 sudo ./scripts/setup-power-management.sh guard-only --desktop-user deposito
 ```
 
-En Deposito se mantiene la tapa sin accion (`config/lidbtn-disabled`). No
-reactivar la hibernacion automatica hasta verificar apagado y reanudacion reales.
+En Deposito se dejo temporalmente la tapa sin accion (`config/lidbtn-disabled`).
+Tras validar un ciclo real se reactivo su disparador; falta comprobar otro ciclo
+cerrando fisicamente la tapa. El archivo de desactivacion queda como alternativa
+de seguridad si reaparece un bloqueo.
 El helper y el hook anteriores se respaldan en `/var/backups/notebook/hibernate-guard.*`.
 La prueba sin hibernar del 2026-09-12 paso en Deposito: preparacion con salida
 0, tty63 activa en VT_AUTO/KD_TEXT, recuperacion con salida 0, escritorio en
