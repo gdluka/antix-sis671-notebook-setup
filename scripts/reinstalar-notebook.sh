@@ -3,6 +3,8 @@ set -Eeuo pipefail
 
 restart_ui=false
 configure_power=true
+browser="min"
+keep_firefox=false
 
 usage() {
     cat <<'EOF'
@@ -12,6 +14,8 @@ Actualiza antiX, instala los extras y restaura la configuracion de esta notebook
 Debe ejecutarse como usuario normal, sin sudo.
 
 Opciones:
+  --browser min|brave Navegador predeterminado (default: min).
+  --keep-firefox      Conserva Firefox y profile-sync-daemon instalados.
   --restart-ui       Aplica la pantalla inmediatamente (cierra la sesion grafica).
   --skip-power       No configura hibernacion ni bloquea la suspension.
   -h, --help         Muestra esta ayuda.
@@ -20,6 +24,13 @@ EOF
 
 while (($#)); do
     case "$1" in
+        --browser)
+            [[ $# -ge 2 ]] || { echo 'Falta el valor de --browser.' >&2; exit 2; }
+            browser="$2"
+            shift 2
+            continue
+            ;;
+        --keep-firefox) keep_firefox=true ;;
         --restart-ui) restart_ui=true ;;
         --configure-power) configure_power=true ;;
         --skip-power) configure_power=false ;;
@@ -29,13 +40,18 @@ while (($#)); do
     shift
 done
 
+[[ $browser == "min" || $browser == "brave" ]] || {
+    printf 'Navegador no soportado: %s (usa min o brave).\n' "$browser" >&2
+    exit 2
+}
+
 if [[ ${EUID} -eq 0 ]]; then
     echo 'Ejecuta este instalador como usuario normal, sin sudo.' >&2
     exit 1
 fi
 
 script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
-for required in configurar_pantalla.sh configurar_arranque_visual.sh configurar_rofi.sh configurar_touchpad.sh configurar_firefox.sh configurar_psd.sh configurar_audio.sh configurar_agente_impresion.sh configurar_netbird.sh configurar_wifi.sh; do
+for required in configurar_pantalla.sh configurar_arranque_visual.sh configurar_rofi.sh configurar_touchpad.sh configurar_navegador.sh configurar_audio.sh configurar_agente_impresion.sh configurar_netbird.sh configurar_wifi.sh; do
     [[ -x "$script_dir/$required" ]] || {
         echo "Falta el script ejecutable: $script_dir/$required" >&2
         exit 1
@@ -51,18 +67,14 @@ sudo apt-get upgrade -y
 
 echo '[3/11] Instalando paquetes necesarios...'
 sudo apt-get install -y \
-    firefox-esr \
     git \
     jq \
     bootlogd \
     console-common \
     pciutils \
-    profile-sync-daemon \
     rofi \
     rsync \
     slimski \
-    sqlite3 \
-    webext-ublock-origin-firefox \
     xcape \
     xinput \
     xserver-xorg-core \
@@ -72,12 +84,9 @@ sudo apt-get install -y \
 echo '[4/11] Configurando aplicaciones del usuario...'
 "$script_dir/configurar_rofi.sh" --skip-packages
 "$script_dir/configurar_touchpad.sh"
-if [[ -d $HOME/.mozilla/firefox ]]; then
-    "$script_dir/configurar_firefox.sh" --skip-packages
-else
-    echo 'Firefox se configurara despues de abrirlo por primera vez.'
-fi
-"$script_dir/configurar_psd.sh" --skip-packages --user "$USER"
+browser_args=(--browser "$browser")
+$keep_firefox && browser_args+=(--keep-firefox)
+"$script_dir/configurar_navegador.sh" "${browser_args[@]}"
 
 echo '[5/11] Estabilizando el audio del conector auxiliar...'
 "$script_dir/configurar_audio.sh"
@@ -115,7 +124,7 @@ if $configure_power; then
         echo "No se encontro $power_script" >&2
         exit 1
     }
-    sudo "$power_script" apply --desktop-user "$USER" --yes
+    sudo "$power_script" apply --desktop-user "$USER" --browser "$browser" --yes
 fi
 
 echo

@@ -9,6 +9,7 @@ swap_file="/swap/swap"
 swap_size_gib="5"
 assume_yes="false"
 hibernate_on_lid="true"
+browser="min"
 audit_failures=0
 reboot_required="false"
 
@@ -34,6 +35,7 @@ Opciones:
   --swap-size-gib N        Tamaño del swapfile nuevo (default: 5 GiB).
   --hibernate-on-lid       Hiberna al cerrar la tapa (predeterminado).
   --no-hibernate-on-lid    Deja la tapa sin acción automática.
+  --browser min|brave      Navegador que se restaura (default: min).
   --yes                    Aplica sin pedir confirmación.
   -h, --help               Muestra esta ayuda.
 
@@ -79,6 +81,11 @@ while [[ $# -gt 0 ]]; do
       hibernate_on_lid="false"
       shift
       ;;
+    --browser)
+      [[ $# -ge 2 ]] || die "Falta el valor de --browser."
+      browser="$2"
+      shift 2
+      ;;
     -h|--help)
       usage
       exit 0
@@ -105,6 +112,8 @@ fi
   || die "--swap-size-gib debe ser un entero."
 (( 10#${swap_size_gib} >= 1 && 10#${swap_size_gib} <= 64 )) \
   || die "--swap-size-gib debe estar entre 1 y 64."
+[[ "${browser}" == "min" || "${browser}" == "brave" ]] \
+  || die "--browser debe ser min o brave."
 
 export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
@@ -470,7 +479,19 @@ configure_hibernate_session_guard() {
   validate_desktop_user
   command -v python3 >/dev/null || die "Falta python3 para verificar la consola."
   command -v timeout >/dev/null || die "Falta timeout."
-  local helper_source backup_dir
+  local helper_source backup_dir browser_command browser_label browser_process_names
+  case "${browser}" in
+    min)
+      browser_command="min"
+      browser_label="Min"
+      browser_process_names="min"
+      ;;
+    brave)
+      browser_command="brave-browser"
+      browser_label="Brave"
+      browser_process_names="brave brave-browser"
+      ;;
+  esac
   helper_source="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/notebook-hibernate-console.py"
   [[ -r "${helper_source}" ]] || die "Falta ${helper_source}"
   install -d -m 0755 /etc/pm/sleep.d /usr/local/sbin
@@ -488,37 +509,40 @@ configure_hibernate_session_guard() {
 # Cierra X antes de hibernar y recupera la red al volver.
 desktop_user="${desktop_user}"
 marker_dir="/var/lib/notebook-session-guard/\${desktop_user}"
-firefox_marker="\${marker_dir}/restore-firefox"
+browser_marker="\${marker_dir}/restore-browser"
+browser_process_names="${browser_process_names}"
 display_marker="/run/restart-slimski-after-hibernate"
 log_file="/var/log/hibernate-session-guard.log"
 log() { printf '%s %s\\n' "\$(date '+%F %T')" "\$*" >>"\${log_file}"; }
-firefox_running() {
-  pgrep -u "\${desktop_user}" -x firefox-esr >/dev/null 2>&1 \\
-    || pgrep -u "\${desktop_user}" -x firefox >/dev/null 2>&1
+browser_running() {
+  for process_name in \${browser_process_names}; do
+    pgrep -u "\${desktop_user}" -x "\${process_name}" >/dev/null 2>&1 && return 0
+  done
+  return 1
 }
 case "\${1:-}" in
   hibernate)
     log "Preparando la sesión antes de hibernar."
     install -d -o "\${desktop_user}" -g "\${desktop_user}" -m 0700 "\${marker_dir}"
-    if firefox_running; then
-      : >"\${firefox_marker}"
-      chown "\${desktop_user}:\${desktop_user}" "\${firefox_marker}"
-      main_pid="\$(pgrep -u "\${desktop_user}" -o -x firefox-esr 2>/dev/null \\
-        || pgrep -u "\${desktop_user}" -o -x firefox 2>/dev/null || true)"
+    if browser_running; then
+      : >"\${browser_marker}"
+      chown "\${desktop_user}:\${desktop_user}" "\${browser_marker}"
+      main_pid=""
+      for process_name in \${browser_process_names}; do
+        main_pid="\$(pgrep -u "\${desktop_user}" -o -x "\${process_name}" 2>/dev/null || true)"
+        [ -z "\${main_pid}" ] || break
+      done
       if [ -n "\${main_pid}" ]; then
         kill -TERM "\${main_pid}" 2>/dev/null || true
         count=0
-        while firefox_running && [ "\${count}" -lt 20 ]; do
+        while browser_running && [ "\${count}" -lt 20 ]; do
           sleep 1
           count=\$((count + 1))
         done
       fi
-      log "Firefox cerrado; se solicitará restaurar sus pestañas al volver."
+      log "${browser_label} cerrado; se solicitará restaurarlo al volver."
     else
-      rm -f "\${firefox_marker}"
-    fi
-    if [ -e /etc/service/psd-${desktop_user} ]; then
-      sv restart /etc/service/psd-${desktop_user} >/dev/null 2>&1 || true
+      rm -f "\${browser_marker}"
     fi
     sync
     if sv status /etc/service/slimski 2>/dev/null | grep -q '^run:'; then
@@ -589,25 +613,25 @@ EOF
   chmod 0755 "${startup_file}"
   startup_temp="$(mktemp "${startup_file}.XXXXXX")"
   awk '
-    $0 == "# BEGIN notebook-hibernate-firefox" { skip=1; next }
-    $0 == "# END notebook-hibernate-firefox" { skip=0; next }
+    $0 == "# BEGIN notebook-hibernate-firefox" || $0 == "# BEGIN notebook-hibernate-min" || $0 == "# BEGIN notebook-hibernate-browser" { skip=1; next }
+    $0 == "# END notebook-hibernate-firefox" || $0 == "# END notebook-hibernate-min" || $0 == "# END notebook-hibernate-browser" { skip=0; next }
     !skip { print }
   ' "${startup_file}" >"${startup_temp}"
-  cat >>"${startup_temp}" <<'EOF'
+  cat >>"${startup_temp}" <<EOF
 
-# BEGIN notebook-hibernate-firefox
+# BEGIN notebook-hibernate-browser
 # Esta marca persiste incluso si el firmware hace un arranque limpio.
-hibernate_firefox_marker="/var/lib/notebook-session-guard/$(id -un)/restore-firefox"
-if [ -f "$hibernate_firefox_marker" ]; then
-    rm -f "$hibernate_firefox_marker"
-    (sleep 6 && "$HOME/.local/bin/firefox-wait" --restore-last-session) &
+hibernate_browser_marker="/var/lib/notebook-session-guard/\$(id -un)/restore-browser"
+if [ -f "\$hibernate_browser_marker" ]; then
+    rm -f "\$hibernate_browser_marker"
+    (sleep 6 && ${browser_command} >/dev/null 2>&1) &
 fi
-# END notebook-hibernate-firefox
+# END notebook-hibernate-browser
 EOF
   chown "${desktop_user}:${desktop_user}" "${startup_temp}"
   chmod 0755 "${startup_temp}"
   mv "${startup_temp}" "${startup_file}"
-  pass "Sesión gráfica protegida y Firefox configurado para restaurarse."
+  pass "Sesión gráfica protegida y ${browser_label} configurado para restaurarse."
 }
 
 disable_suspend_command() {

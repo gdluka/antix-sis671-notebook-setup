@@ -18,10 +18,10 @@ en el commit exacto que funciono durante las pruebas.
 - Opcion de recuperacion VESA 1280x768.
 - GRUB oculto con espera de un segundo, arranque silencioso y animacion de
   consola compatible con esta GPU.
-- Firefox ESR optimizado para hardware limitado, uBlock Origin, PSD en RAM y
-  un lanzador que evita instancias duplicadas.
-- Hibernacion mediante swapfile, suspension deshabilitada y recuperacion de
-  Firefox, Slimski y Wi-Fi al reanudar.
+- Min como navegador predeterminado (Brave opcional) y botón «Buscador web»
+  de IceWM vinculado.
+- Hibernacion mediante swapfile, suspension deshabilitada y recuperación del
+  navegador elegido, Slimski y Wi-Fi al reanudar.
 - Hibernacion automatica al cerrar la tapa, con proteccion contra eventos
   duplicados (`--no-hibernate-on-lid` permite desactivarla).
 - Rofi con `Win`, `Win+Espacio` o `Win+R`, y explorador con `Win+E`.
@@ -55,6 +55,10 @@ automaticamente. Al terminar, reinicia para aplicar GRUB y Xorg.
 
 Opciones utiles:
 
+- `--browser min` usa Min (predeterminado); `--browser brave` instala Brave.
+- `--keep-firefox` conserva Firefox; sin esta opción se desinstalan Firefox y
+  profile-sync-daemon, pero no se borran los perfiles de `~/.mozilla`.
+
 ```bash
 # Aplicar Xorg inmediatamente; cierra la sesion grafica.
 ./reinstalar-notebook.sh --restart-ui
@@ -83,8 +87,8 @@ Opciones utiles:
 - No se incluye el codigo del controlador de terceros: se descarga del
   repositorio original y se fija al commit probado.
 - La hibernacion cierra Xorg de forma controlada debido a las limitaciones de
-  esta GPU. Firefox restaura su sesion, pero otras aplicaciones graficas pueden
-  no recuperar ventanas abiertas.
+  esta GPU. El navegador elegido vuelve a abrirse, pero sus pestañas dependen de
+  su restauracion propia y las demás aplicaciones no recuperan sus ventanas.
 - Se crean respaldos en `/var/backups/notebook` antes de reemplazar archivos
   sensibles.
 
@@ -93,8 +97,11 @@ Opciones utiles:
 - `scripts/reinstalar-notebook.sh`: instalacion completa.
 - `scripts/configurar_pantalla.sh`: SiS moderno o recuperacion VESA.
 - `scripts/configurar_arranque_visual.sh`: GRUB y animacion de consola.
-- `scripts/configurar_firefox.sh`: preferencias y lanzador protegido.
-- `scripts/configurar_psd.sh`: sincronizacion del perfil de Firefox con runit.
+- `scripts/configurar_navegador.sh`: instala Min o Brave, fija el navegador
+  predeterminado, actualiza el botón de IceWM y reemplaza Firefox.
+- `scripts/configurar_min.sh`: acceso compatible que selecciona Min.
+- `scripts/configurar_firefox.sh` y `scripts/configurar_psd.sh`: legado
+  opcional; ya no se ejecutan en una reinstalación normal.
 - `scripts/configurar_rofi.sh`: atajos de IceWM y Rofi.
 - `scripts/configurar_touchpad.sh`: velocidad del touchpad y restauración al reanudar.
 - `scripts/notebook-touchpad-speed`: ajuste y observador de reanudación del touchpad.
@@ -192,6 +199,16 @@ Después de un reinicio, `wlan0` recibió `192.168.5.115` y `192.168.5.116`.
 ConnMan y dhcpcd estaban ambos en estado `run`; al detener y deshabilitar
 dhcpcd quedó solamente `192.168.5.115`. Esto descarta la hibernación como causa
 directa y confirma dos gestores DHCP concurrentes.
+
+## Navegador predeterminado (2026-09-12)
+
+Min reemplaza a Firefox en el flujo predeterminado de esta notebook; Brave puede
+seleccionarse con `--browser brave`. La decisión se basa en el uso observado en
+este equipo: Firefox consumía demasiada memoria
+y se volvía inestable al reproducir videos de YouTube durante la carga de
+publicidad. Una reinstalación normal desinstala los paquetes de Firefox y PSD,
+pero conserva el perfil del usuario en `~/.mozilla`; `--keep-firefox` permite
+mantener también los paquetes.
 
 ## Licencia
 
