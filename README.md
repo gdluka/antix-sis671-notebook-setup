@@ -140,6 +140,9 @@ Para actualizar solamente este flujo, sin tocar swap, GRUB ni el evento de tapa:
 
 ```bash
 sudo ./scripts/setup-power-management.sh guard-only --desktop-user deposito
+
+# Actualizar solamente los eventos físicos, sin tocar swap ni GRUB.
+sudo ./scripts/setup-power-management.sh acpi-only
 ```
 
 En Deposito la tapa queda sin accion (`config/lidbtn-disabled`). Tras validar un
@@ -149,6 +152,22 @@ se conservo el mismo `boot_id` y terminaron los hooks `thaw`: la imagen si se
 recupero. Se desactivo nuevamente el disparador por seguridad. Sigue pendiente
 diagnosticar por que el boton no responde; no se considera resuelto el ciclo
 de uso completo ni se ha confirmado una causa de hardware o firmware.
+
+En un arranque limpio se comprobo que una pulsacion breve genera los dos
+eventos ACPI esperados (`PBTN` y `LNXPWRBN`). Después de reanudar con el modo
+`shutdown` no se observaron eventos. Por eso la siguiente prueba usa el modo
+`platform`, recomendado por el kernel para ejecutar los callbacks ACPI que
+`shutdown` omite. Esta hipotesis requiere validar un ciclo real y volver a
+probar el boton después de reanudar.
+
+La prueba con `platform` permitio encender con una pulsacion breve y reanudo la
+imagen correctamente. Sin embargo, después de reanudar, el firmware siguio sin
+emitir eventos del boton: ni el socket de acpid ni los dispositivos de entrada
+los recibieron. Cerrar y abrir la tapa si emitio sus eventos, y desvincular y
+volver a vincular los dos dispositivos `PNP0C0C:00` y `LNXPWRBN:00` no corrigio
+el boton. Por eso el instalador configura ambos controles para hibernar, pero
+la tapa es la alternativa confiable después de una reanudacion. El botón solo
+puede actuar cuando el firmware efectivamente entrega el evento a Linux.
 El helper y el hook anteriores se respaldan en `/var/backups/notebook/hibernate-guard.*`.
 La prueba sin hibernar del 2026-09-12 paso en Deposito: preparacion con salida
 0, tty63 activa en VT_AUTO/KD_TEXT, recuperacion con salida 0, escritorio en

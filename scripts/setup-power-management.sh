@@ -18,11 +18,13 @@ Uso:
   setup-power-management.sh audit [opciones]
   sudo setup-power-management.sh apply [opciones]
   sudo setup-power-management.sh guard-only --desktop-user USUARIO
+  sudo setup-power-management.sh acpi-only [--no-hibernate-on-lid]
 
 Acciones:
   audit   Inspecciona suspensión, hibernación, swap y resume sin modificar.
   apply   Desactiva suspensión, habilita hibernación y configura resume.
   guard-only Actualiza solo la preparacion de consola y recuperacion de sesion.
+  acpi-only Actualiza solo los eventos de tapa y botón de encendido.
 
 Opciones:
   --desktop-user USUARIO   Usuario del entorno gráfico. Por defecto usa
@@ -94,7 +96,8 @@ if [[ "${action}" == "-h" || "${action}" == "--help" ]]; then
   exit 0
 fi
 
-[[ "${action}" == "audit" || "${action}" == "apply" || "${action}" == "guard-only" ]] \
+[[ "${action}" == "audit" || "${action}" == "apply" || "${action}" == "guard-only" \
+  || "${action}" == "acpi-only" ]] \
   || { printf 'Acción desconocida: %s\n' "${action}" >&2; usage >&2; exit 2; }
 [[ "${swap_file}" == /* && "${swap_file}" != "/" ]] \
   || die "Ruta de swap insegura: ${swap_file}"
@@ -340,7 +343,7 @@ exec 9>/run/lock/notebook-lid-hibernate.lock
 flock -n 9 || exit 0
 
 logger -t notebook-lid "Tapa cerrada: iniciando hibernación."
-exec /usr/sbin/pm-hibernate
+exec /etc/acpi/notebook-hibernate.sh lid
 EOF
   install_from_diverted "${handler_temp}" "${handler}" 0755
 
@@ -357,7 +360,38 @@ EOF
   mv "${elogind_temp}" /etc/elogind/logind.conf.d/90-notebook-lid.conf
 }
 
+configure_power_button_hibernate() {
+  local event_file handler event_temp handler_temp
+  event_file="/etc/acpi/events/powerbtn-acpi-support"
+  handler="/etc/acpi/notebook-hibernate.sh"
+  ensure_diversion "${event_file}"
+
+  event_temp="$(mktemp "${event_file}.XXXXXX")"
+  cat > "${event_temp}" <<'EOF'
+# Hibernar ante una pulsación breve del botón de encendido.
+event=button[ /]power
+action=/etc/acpi/notebook-hibernate.sh power
+EOF
+  install_from_diverted "${event_temp}" "${event_file}" 0644
+
+  handler_temp="$(mktemp "${handler}.XXXXXX")"
+  cat > "${handler_temp}" <<'EOF'
+#!/bin/sh
+set -u
+
+# Una pulsación física puede producir PBTN y LNXPWRBN; ejecutar una sola vez.
+install -d -m 0755 /run/lock
+exec 9>/run/lock/notebook-hibernate.lock
+flock -n 9 || exit 0
+
+logger -t notebook-power "${1:-boton}: iniciando hibernación."
+exec /usr/sbin/pm-hibernate
+EOF
+  install_from_diverted "${handler_temp}" "${handler}" 0755
+}
+
 configure_acpi() {
+  configure_power_button_hibernate
   if [[ "${hibernate_on_lid}" == "true" ]]; then
     configure_lid_hibernate
   else
@@ -420,15 +454,16 @@ configure_pm_utils() {
   local pm_temp
   pm_temp="$(mktemp /etc/pm/config.d/10-hibernate-only.XXXXXX)"
   cat > "${pm_temp}" <<'EOF'
-# Configuración local: usar apagado completo al escribir la imagen.
-HIBERNATE_MODE="shutdown"
+# Usar la secuencia ACPI de la plataforma. A diferencia de "shutdown", esta
+# ejecuta los callbacks del firmware que restauran los dispositivos ACPI.
+HIBERNATE_MODE="platform"
 HIBERNATE_RESUME_POST_VIDEO="no"
 # Esta SiS puede perder la pantalla al cambiar de VT o restaurar el modo de video.
 ADD_PARAMETERS="--quirk-none --quirk-no-chvt"
 EOF
   chmod 0644 "${pm_temp}"
   mv "${pm_temp}" /etc/pm/config.d/10-hibernate-only
-  pass "pm-utils configurado para hibernación por apagado."
+  pass "pm-utils configurado para hibernación ACPI de plataforma."
 }
 
 configure_hibernate_session_guard() {
@@ -670,6 +705,14 @@ audit_power() {
   else
     fail "El comportamiento de la tapa no está configurado."
   fi
+  if [[ -r /etc/acpi/events/powerbtn-acpi-support ]] \
+    && grep -q '^action=/etc/acpi/notebook-hibernate.sh power$' \
+      /etc/acpi/events/powerbtn-acpi-support \
+    && [[ -x /etc/acpi/notebook-hibernate.sh ]]; then
+    pass "Botón de encendido configurado para hibernar cuando ACPI informa la pulsación."
+  else
+    fail "El botón de encendido no está configurado para hibernar."
+  fi
   if [[ -r /etc/acpi/events/sleepbtn ]] \
     && grep -q '^action=/bin/true$' /etc/acpi/events/sleepbtn; then
     pass "Botón de suspensión neutralizado."
@@ -728,6 +771,11 @@ validate_desktop_user
 if [[ "${action}" == "guard-only" ]]; then
   configure_hibernate_session_guard
   warn "Tapa, swap y GRUB sin cambios. Hibernacion real pendiente de validar."
+  exit 0
+fi
+if [[ "${action}" == "acpi-only" ]]; then
+  configure_acpi
+  warn "Swap, GRUB y guardia de consola sin cambios."
   exit 0
 fi
 confirm_apply

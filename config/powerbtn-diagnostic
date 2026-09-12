@@ -1,0 +1,3 @@
+# Temporal: observar pulsaciones sin apagar ni hibernar mediante acpid.
+event=button[ /]power
+action=/bin/true
