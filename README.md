@@ -12,7 +12,9 @@ en el commit exacto que funciono durante las pruebas.
 
 - `apt update` y `apt upgrade`.
 - Controlador SiS 671 moderno con aceleracion EXA 2D, panel 1280x800 y
-  monitor VGA 1366x768 extendido a la derecha mediante Xinerama.
+  deteccion opcional de VGA mediante `MergedFB auto` al iniciar Xorg.
+  La extension con monitor y la conexion/desconexion en caliente quedan
+  pendientes de validar; no se fuerza una segunda pantalla ausente.
 - Opcion de recuperacion VESA 1280x768.
 - GRUB oculto con espera de un segundo, arranque silencioso y animacion de
   consola compatible con esta GPU.
@@ -61,6 +63,10 @@ Opciones utiles:
 # Comprobar el controlador SiS sin modificar nada.
 ./configurar_pantalla.sh --check
 
+# Cambiar solo la configuracion, sin recompilar el controlador instalado.
+# --restart-ui cierra las aplicaciones; guardar el trabajo primero.
+./configurar_pantalla.sh --config-only --restart-ui
+
 # Recuperar la interfaz con VESA si el controlador SiS deja de funcionar.
 ./configurar_pantalla.sh --vesa
 
@@ -97,7 +103,24 @@ Opciones utiles:
 - `scripts/configurar_audio.sh`: evita los cortes por ahorro de energía del
   códec Realtek y conserva el ajuste ALSA.
 - `scripts/setup-power-management.sh`: swap, resume e hibernacion.
-- `config/xorg.conf`: referencia de la configuracion SiS dual-head validada.
+- `config/xorg-auto.conf`: configuracion predeterminada con VGA opcional.
+- `config/xorg.conf`: referencia anterior dual-head; fuerza dos pantallas y
+  puede dejar ventanas fuera del panel cuando no hay monitor externo.
+
+## Verificacion de pantallas (2026-09-12)
+
+En la notebook Deposito, sin monitor externo, se aplico la configuracion
+`MergedFB auto` y se reinicio Slimski mediante **runit**. Xorg informo
+`No CRT1/VGA detected` y desactivo MergedFB; `xdpyinfo` y `xrandr` mostraron
+un escritorio de **1280x800**, sin espacio reservado para VGA. El Wi-Fi y
+el acceso SSH siguieron disponibles. El primer intento con el script SysV
+de Slimski fallo; en antiX con runit usar `sv restart /etc/service/slimski`,
+como hace el instalador, sin mezclar ambos gestores.
+
+No se comprobo extension con VGA conectado ni hotplug. `MergedFB auto` no
+debe interpretarse como garantia de autodeteccion en caliente. Tampoco se
+probaron en esta sesion hibernacion/reanudacion, audio, touchpad o impresion.
+El instalador conserva respaldo de Xorg en `/var/backups/notebook`.
 
 ## Licencia
 
