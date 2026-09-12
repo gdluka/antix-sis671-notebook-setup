@@ -122,6 +122,38 @@ debe interpretarse como garantia de autodeteccion en caliente. Tampoco se
 probaron en esta sesion hibernacion/reanudacion, audio, touchpad o impresion.
 El instalador conserva respaldo de Xorg en `/var/backups/notebook`.
 
+## Hibernacion: bloqueo de consola (2026-09-12)
+
+Se observo `pm-hibernate` detenido en `vt_waitactive -> vt_move_to_console ->
+pm_prepare_console`: el escritorio terminaba, pero el equipo no se apagaba.
+Intentar interrumpir ese proceso no recupero el equipo y fue necesario cortar
+la alimentacion. No se debe matar un intento bloqueado y suponer que aborto.
+
+La nueva preparacion detiene Slimski con runit, espera a Xorg, deja la consola
+en modo texto y verifica que **tty63** (la consola usada por Linux para hibernar)
+este activa antes de permitir que pm-utils escriba en `/sys/power/state`.
+Rechaza modificar la consola con X activo y cancela si vence el plazo de
+preparacion. Esto no garantiza que otras etapas de hibernacion no puedan fallar.
+La recuperacion solicita iniciar el escritorio antes de recuperar Wi-Fi.
+
+Para actualizar solamente este flujo, sin tocar swap, GRUB ni el evento de tapa:
+
+```bash
+sudo ./scripts/setup-power-management.sh guard-only --desktop-user deposito
+```
+
+En Deposito se mantiene la tapa sin accion (`config/lidbtn-disabled`). No
+reactivar la hibernacion automatica hasta verificar apagado y reanudacion reales.
+El helper y el hook anteriores se respaldan en `/var/backups/notebook/hibernate-guard.*`.
+La prueba sin hibernar del 2026-09-12 paso en Deposito: preparacion con salida
+0, tty63 activa en VT_AUTO/KD_TEXT, recuperacion con salida 0, escritorio en
+tty7 y Wi-Fi/SSH disponibles. Apagado y reanudacion reales siguen pendientes.
+Las pruebas unitarias no hibernan ni modifican consolas:
+
+```bash
+PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -v
+```
+
 ## Licencia
 
 Copyright (C) 2026 Guillermo De Luca.

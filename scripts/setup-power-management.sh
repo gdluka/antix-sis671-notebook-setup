@@ -17,10 +17,12 @@ usage() {
 Uso:
   setup-power-management.sh audit [opciones]
   sudo setup-power-management.sh apply [opciones]
+  sudo setup-power-management.sh guard-only --desktop-user USUARIO
 
 Acciones:
   audit   Inspecciona suspensión, hibernación, swap y resume sin modificar.
   apply   Desactiva suspensión, habilita hibernación y configura resume.
+  guard-only Actualiza solo la preparacion de consola y recuperacion de sesion.
 
 Opciones:
   --desktop-user USUARIO   Usuario del entorno gráfico. Por defecto usa
@@ -92,7 +94,7 @@ if [[ "${action}" == "-h" || "${action}" == "--help" ]]; then
   exit 0
 fi
 
-[[ "${action}" == "audit" || "${action}" == "apply" ]] \
+[[ "${action}" == "audit" || "${action}" == "apply" || "${action}" == "guard-only" ]] \
   || { printf 'Acción desconocida: %s\n' "${action}" >&2; usage >&2; exit 2; }
 [[ "${swap_file}" == /* && "${swap_file}" != "/" ]] \
   || die "Ruta de swap insegura: ${swap_file}"
@@ -431,7 +433,18 @@ EOF
 
 configure_hibernate_session_guard() {
   validate_desktop_user
-  install -d -m 0755 /etc/pm/sleep.d
+  command -v python3 >/dev/null || die "Falta python3 para verificar la consola."
+  command -v timeout >/dev/null || die "Falta timeout."
+  local helper_source backup_dir
+  helper_source="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/notebook-hibernate-console.py"
+  [[ -r "${helper_source}" ]] || die "Falta ${helper_source}"
+  install -d -m 0755 /etc/pm/sleep.d /usr/local/sbin
+  install -d -m 0700 /var/backups/notebook
+  backup_dir="$(mktemp -d /var/backups/notebook/hibernate-guard.XXXXXX)"
+  for previous in /etc/pm/sleep.d/00-session-guard /usr/local/sbin/notebook-hibernate-console; do
+    [[ ! -f "${previous}" ]] || cp -p "${previous}" "${backup_dir}/$(basename "${previous}")"
+  done
+  install -o root -g root -m 0755 "${helper_source}" /usr/local/sbin/notebook-hibernate-console
 
   local hook_temp startup_file startup_temp
   hook_temp="$(mktemp /etc/pm/sleep.d/00-session-guard.XXXXXX)"
@@ -441,7 +454,7 @@ configure_hibernate_session_guard() {
 desktop_user="${desktop_user}"
 marker_dir="/var/lib/notebook-session-guard/\${desktop_user}"
 firefox_marker="\${marker_dir}/restore-firefox"
-display_marker="/tmp/restart-slimski-after-hibernate"
+display_marker="/run/restart-slimski-after-hibernate"
 log_file="/var/log/hibernate-session-guard.log"
 log() { printf '%s %s\\n' "\$(date '+%F %T')" "\$*" >>"\${log_file}"; }
 firefox_running() {
@@ -475,16 +488,41 @@ case "\${1:-}" in
     sync
     if sv status /etc/service/slimski 2>/dev/null | grep -q '^run:'; then
       : >"\${display_marker}"
-      sv down /etc/service/slimski >/dev/null 2>&1 || true
-      if [ -x /usr/local/bin/notebook-console-animation ]; then
-        /usr/local/bin/notebook-console-animation hibernate /dev/tty1
+      if ! sv -w 10 down /etc/service/slimski; then
+        log "ERROR: no se pudo detener Slimski; se cancela la hibernación."
+        sv up /etc/service/slimski || true
+        exit 1
       fi
-      log "Interfaz gráfica detenida de forma controlada."
+      count=0
+      while pgrep -x Xorg >/dev/null 2>&1 && [ "\${count}" -lt 10 ]; do
+        sleep 1
+        count=\$((count + 1))
+      done
+      log "Servicio gráfico detenido; verificando consola antes de hibernar."
     else
       rm -f "\${display_marker}"
     fi
+    if ! timeout -k 2 12 /usr/local/sbin/notebook-hibernate-console prepare >>"\${log_file}" 2>&1; then
+      log "ERROR: consola no preparada; hibernación cancelada antes de escribir /sys/power/state."
+      if [ -f "\${display_marker}" ]; then
+        sv up /etc/service/slimski || true
+      fi
+      exit 1
+    fi
+    log "Consola de hibernación verificada; todavía no se guardó la imagen."
     ;;
   thaw)
+    if [ -f "\${display_marker}" ]; then
+      if ! pgrep -x Xorg >/dev/null 2>&1; then
+        timeout -k 2 12 /usr/local/sbin/notebook-hibernate-console restore >>"\${log_file}" 2>&1 || true
+      fi
+      if sv up /etc/service/slimski; then
+        rm -f "\${display_marker}"
+        log "Arranque del escritorio solicitado después de reanudar o abortar."
+      else
+        log "ERROR: no se pudo iniciar Slimski."
+      fi
+    fi
     if [ -e /etc/service/connman ]; then
       sv restart /etc/service/connman >/dev/null 2>&1 || true
     elif [ -x /etc/init.d/connman ]; then
@@ -501,15 +539,11 @@ case "\${1:-}" in
     else
       log "Aviso: Wi-Fi no obtuvo dirección tras 15 segundos."
     fi
-    if [ -f "\${display_marker}" ]; then
-      rm -f "\${display_marker}"
-      sv up /etc/service/slimski >/dev/null 2>&1 || true
-      log "Interfaz gráfica reiniciada después de reanudar."
-    fi
     ;;
 esac
 exit 0
 EOF
+  sh -n "${hook_temp}"
   chmod 0755 "${hook_temp}"
   mv "${hook_temp}" /etc/pm/sleep.d/00-session-guard
 
@@ -580,7 +614,8 @@ install_dependencies() {
   local -a missing_commands=()
   local required_command
   for required_command in acpid pm-hibernate pm-is-supported filefrag \
-    swapon mkswap findmnt update-initramfs update-grub dpkg-divert visudo; do
+    swapon mkswap findmnt update-initramfs update-grub dpkg-divert visudo \
+    python3 timeout pgrep; do
     command -v "${required_command}" >/dev/null 2>&1 \
       || missing_commands+=("${required_command}")
   done
@@ -591,7 +626,8 @@ install_dependencies() {
   info "Instalando dependencias faltantes: ${missing_commands[*]}"
   apt-get update
   apt-get install --yes --no-install-recommends \
-    acpid pm-utils e2fsprogs util-linux initramfs-tools grub-common sudo
+    acpid pm-utils e2fsprogs util-linux initramfs-tools grub-common sudo \
+    python3 coreutils procps
 }
 
 audit_power() {
@@ -689,6 +725,11 @@ fi
 
 require_root
 validate_desktop_user
+if [[ "${action}" == "guard-only" ]]; then
+  configure_hibernate_session_guard
+  warn "Tapa, swap y GRUB sin cambios. Hibernacion real pendiente de validar."
+  exit 0
+fi
 confirm_apply
 install_dependencies
 ensure_swap

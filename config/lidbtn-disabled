@@ -1,0 +1,4 @@
+# Proteccion temporal: no hibernar ni suspender al cerrar la tapa.
+# La hibernacion SiS671 permanece pendiente de corregir y validar.
+event=button[ /]lid
+action=/bin/true
