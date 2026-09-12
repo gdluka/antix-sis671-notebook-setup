@@ -147,7 +147,11 @@ reactivar la hibernacion automatica hasta verificar apagado y reanudacion reales
 El helper y el hook anteriores se respaldan en `/var/backups/notebook/hibernate-guard.*`.
 La prueba sin hibernar del 2026-09-12 paso en Deposito: preparacion con salida
 0, tty63 activa en VT_AUTO/KD_TEXT, recuperacion con salida 0, escritorio en
-tty7 y Wi-Fi/SSH disponibles. Apagado y reanudacion reales siguen pendientes.
+tty7 y Wi-Fi/SSH disponibles. La prueba real posterior tambien paso: el usuario
+confirmo el apagado y encendio con el boton; se conservo el mismo `boot_id`,
+pm-utils termino los hooks `thaw`, Slimski volvio a ejecutarse y se recuperaron
+Wi-Fi y SSH. Esto valida un ciclo de hibernacion/reanudacion, no conserva las
+aplicaciones graficas ni prueba aun varios ciclos o el disparo por tapa.
 Las pruebas unitarias no hibernan ni modifican consolas:
 
 ```bash
