@@ -142,10 +142,13 @@ Para actualizar solamente este flujo, sin tocar swap, GRUB ni el evento de tapa:
 sudo ./scripts/setup-power-management.sh guard-only --desktop-user deposito
 ```
 
-En Deposito se dejo temporalmente la tapa sin accion (`config/lidbtn-disabled`).
-Tras validar un ciclo real se reactivo su disparador; falta comprobar otro ciclo
-cerrando fisicamente la tapa. El archivo de desactivacion queda como alternativa
-de seguridad si reaparece un bloqueo.
+En Deposito la tapa queda sin accion (`config/lidbtn-disabled`). Tras validar un
+ciclo manual se reactivo y probo el disparador por tapa: guardo la imagen, pero
+el usuario no pudo encender con el boton hasta retirar la bateria. Al volver
+se conservo el mismo `boot_id` y terminaron los hooks `thaw`: la imagen si se
+recupero. Se desactivo nuevamente el disparador por seguridad. Sigue pendiente
+diagnosticar por que el boton no responde; no se considera resuelto el ciclo
+de uso completo ni se ha confirmado una causa de hardware o firmware.
 El helper y el hook anteriores se respaldan en `/var/backups/notebook/hibernate-guard.*`.
 La prueba sin hibernar del 2026-09-12 paso en Deposito: preparacion con salida
 0, tty63 activa en VT_AUTO/KD_TEXT, recuperacion con salida 0, escritorio en
